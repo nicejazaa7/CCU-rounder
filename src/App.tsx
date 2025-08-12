@@ -75,7 +75,6 @@ type DripInputs = {
 const defaultHemo: HemoInputs = { sex: "" };
 const defaultDrip: DripInputs = {};
 
-// Hemodynamic calculations
 function useHemodynamics(state: HemoInputs) {
   const { heightCm, weightKg, hb, hr, sbp, dbp, cvp, pasp, padp, pcwp, sao2, svo2 } = state;
 
@@ -116,7 +115,7 @@ function useHemodynamics(state: HemoInputs) {
 
   const vo2 = useMemo(() => {
     if (!bsa) return undefined;
-    return 125 * bsa; // mL/min estimated
+    return 125 * bsa; // mL/min
   }, [bsa]);
 
   const co = useMemo(() => {
@@ -143,20 +142,30 @@ function useHemodynamics(state: HemoInputs) {
     const C = co;
     const Cv = clampNum(cvp);
     if (M == null || C == null || Cv == null || C === 0) return undefined;
-    return (80 * (M - Cv)) / C;
+    return (80 * (M - Cv)) / C; // dyn·s·cm^-5
   }, [map, co, cvp]);
 
+  // PVR in dyn·s·cm^-5 (kept for completeness)
   const pvr = useMemo(() => {
-  if (mPAP == null || co == null || pcwp == null || co === 0) return undefined;
-  return (80 * (mPAP - pcwp)) / co;
-}, [mPAP, co, pcwp]);
+    const m = mPAP;
+    const C = co;
+    const w = clampNum(pcwp);
+    if (m == null || C == null || w == null || C === 0) return undefined;
+    return (80 * (m - w)) / C;
+  }, [mPAP, co, pcwp]);
 
-// PVR in Wood Units
-const pvrWU = useMemo(() => {
-  if (mPAP == null || co == null || pcwp == null || co === 0) return undefined;
-  return (mPAP - pcwp) / co;
-}, [mPAP, co, pcwp]);
+  // PVR in Wood Units (preferred)
+  const pvrWU = useMemo(() => {
+    const m = mPAP;
+    const C = co;
+    const w = clampNum(pcwp);
+    if (m == null || C == null || w == null || C === 0) return undefined;
+    return (m - w) / C;
+  }, [mPAP, co, pcwp]);
+
+  return { bsa, map, mPAP, caO2, cvO2, vo2, co, ci, sv, svr, pvr, pvrWU };
 }
+
 
 // Drip calculator
 function calcDose({ mgInBag, volumeMl, rateMlHr, weightKg }: { mgInBag?: number; volumeMl?: number; rateMlHr?: number; weightKg?: number; }) {
