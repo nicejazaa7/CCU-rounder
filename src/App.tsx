@@ -147,14 +147,15 @@ function useHemodynamics(state: HemoInputs) {
   }, [map, co, cvp]);
 
   const pvr = useMemo(() => {
-    const m = mPAP;
-    const C = co;
-    const w = clampNum(pcwp);
-    if (m == null || C == null || w == null || C === 0) return undefined;
-    return (80 * (m - w)) / C;
-  }, [mPAP, co, pcwp]);
+  if (mPAP == null || co == null || pcwp == null || co === 0) return undefined;
+  return (80 * (mPAP - pcwp)) / co;
+}, [mPAP, co, pcwp]);
 
-  return { bsa, map, mPAP, caO2, cvO2, vo2, co, ci, sv, svr, pvr };
+// PVR in Wood Units
+const pvrWU = useMemo(() => {
+  if (mPAP == null || co == null || pcwp == null || co === 0) return undefined;
+  return (mPAP - pcwp) / co;
+}, [mPAP, co, pcwp]);
 }
 
 // Drip calculator
@@ -309,7 +310,8 @@ export default function App() {
                 <Metric label="Cardiac Index" value={results.ci} unit="L/min/m²" digits={2} />
                 <Metric label="Stroke Volume" value={results.sv} unit="mL/beat" digits={0} />
                 <Metric label="SVR" value={results.svr} unit="dyn·s·cm⁻⁵" digits={0} />
-                <Metric label="PVR" value={results.pvr} unit="dyn·s·cm⁻⁵" digits={0} />
+                <Metric label="PVR" value={results.pvrWU} unit="WU" digits={2} />
+
               </div>
               <p className="text-xs text-gray-500 mt-3">Notes: SVR uses MAP−CVP; PVR uses mPAP−PCWP. Fick assumes VO₂ = 125×BSA. For accuracy, enter measured VO₂ when available (future update).</p>
             </Card>
