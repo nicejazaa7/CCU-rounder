@@ -54,8 +54,7 @@ type HemoInputs = {
   weightKg?: string;
   hb?: string;
   hr?: string;
-  sbp?: string;
-  dbp?: string;
+  map?: string;  // direct MAP input (mmHg)
   cvp?: string;
   pasp?: string;
   padp?: string;
@@ -76,7 +75,7 @@ const defaultHemo: HemoInputs = { sex: "" };
 const defaultDrip: DripInputs = {};
 
 function useHemodynamics(state: HemoInputs) {
-  const { heightCm, weightKg, hb, hr, sbp, dbp, cvp, pasp, padp, pcwp, sao2, svo2 } = state;
+  const { heightCm, weightKg, hb, hr, map: mapStr, cvp, pasp, padp, pcwp, sao2, svo2 } = state;
 
   const bsa = useMemo(() => {
     const h = clampNum(heightCm);
@@ -85,12 +84,8 @@ function useHemodynamics(state: HemoInputs) {
     return Math.sqrt((h * w) / 3600);
   }, [heightCm, weightKg]);
 
-  const map = useMemo(() => {
-    const s = clampNum(sbp);
-    const d = clampNum(dbp);
-    if (!s || !d) return undefined;
-    return d + (s - d) / 3;
-  }, [sbp, dbp]);
+  // MAP is now a direct input; just parse it
+  const map = useMemo(() => clampNum(mapStr), [mapStr]);
 
   const mPAP = useMemo(() => {
     const ps = clampNum(pasp);
@@ -211,7 +206,7 @@ export default function App() {
   const [tab, setTab] = useState<"hemo" | "drip">("hemo");
   const [hemo, setHemo] = useState<HemoInputs>(() => {
     try {
-      const saved = localStorage.getItem("ccu_hemo_v1");
+      const saved = localStorage.getItem("ccu_hemo_v2");
       return saved ? { ...defaultHemo, ...JSON.parse(saved) } : defaultHemo;
     } catch {
       return defaultHemo;
@@ -227,7 +222,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    localStorage.setItem("ccu_hemo_v1", JSON.stringify(hemo));
+    localStorage.setItem("ccu_hemo_v2", JSON.stringify(hemo));
   }, [hemo]);
   useEffect(() => {
     localStorage.setItem("ccu_drip_v1", JSON.stringify(drip));
@@ -282,8 +277,7 @@ export default function App() {
               <Card>
                 <div className="text-base font-semibold mb-2">Pressures</div>
                 <div className="space-y-1">
-                  <Field label="SBP" suffix="mmHg" value={hemo.sbp} onChange={(v)=>setHemo({...hemo,sbp:v})} />
-                  <Field label="DBP" suffix="mmHg" value={hemo.dbp} onChange={(v)=>setHemo({...hemo,dbp:v})} />
+                  <Field label="MAP" suffix="mmHg" value={hemo.map} onChange={(v)=>setHemo({...hemo,map:v})} />
                   <Field label="CVP" suffix="mmHg" value={hemo.cvp} onChange={(v)=>setHemo({...hemo,cvp:v})} />
                   <Field label="PASP" suffix="mmHg" value={hemo.pasp} onChange={(v)=>setHemo({...hemo,pasp:v})} />
                   <Field label="PADP" suffix="mmHg" value={hemo.padp} onChange={(v)=>setHemo({...hemo,padp:v})} />
@@ -303,7 +297,6 @@ export default function App() {
                 <div className="text-base font-semibold mb-2">Derived (auto)</div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="p-2 rounded-lg bg-gray-50">BSA (Mosteller)<div className="text-lg font-semibold">{toFixedOrDash(results.bsa,2)} m²</div></div>
-                  <div className="p-2 rounded-lg bg-gray-50">MAP<div className="text-lg font-semibold">{toFixedOrDash(results.map,1)} mmHg</div></div>
                   <div className="p-2 rounded-lg bg-gray-50">mPAP<div className="text-lg font-semibold">{toFixedOrDash(results.mPAP,1)} mmHg</div></div>
                   <div className="p-2 rounded-lg bg-gray-50">CaO₂<div className="text-lg font-semibold">{toFixedOrDash(results.caO2,2)} mL/dL</div></div>
                   <div className="p-2 rounded-lg bg-gray-50">CvO₂<div className="text-lg font-semibold">{toFixedOrDash(results.cvO2,2)} mL/dL</div></div>
@@ -378,7 +371,7 @@ export default function App() {
                 onClick={() => { 
                   setHemo(defaultHemo); 
                   setDrip(defaultDrip); 
-                  localStorage.removeItem("ccu_hemo_v1"); 
+                  localStorage.removeItem("ccu_hemo_v2");
                   localStorage.removeItem("ccu_drip_v1"); 
                 }}
               >Clear all</button>
