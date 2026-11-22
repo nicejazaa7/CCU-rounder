@@ -56,8 +56,9 @@ type HemoInputs = {
   hr?: string;
   map?: string;  // direct MAP input (mmHg)
   cvp?: string;
-  pasp?: string;
-  padp?: string;
+  mpap?: string; // direct mPAP input from monitor (waveform-integrated mean)
+  pasp?: string; // measured, reported only
+  padp?: string; // measured, reported only
   pcwp?: string;
   sao2?: string; // arterial O2 sat %
   svo2?: string; // mixed venous O2 sat %
@@ -75,7 +76,7 @@ const defaultHemo: HemoInputs = { sex: "" };
 const defaultDrip: DripInputs = {};
 
 function useHemodynamics(state: HemoInputs) {
-  const { heightCm, weightKg, hb, hr, map: mapStr, cvp, pasp, padp, pcwp, sao2, svo2 } = state;
+  const { heightCm, weightKg, hb, hr, map: mapStr, cvp, mpap, pasp, padp, pcwp, sao2, svo2 } = state;
 
   const bsa = useMemo(() => {
     const h = clampNum(heightCm);
@@ -87,12 +88,10 @@ function useHemodynamics(state: HemoInputs) {
   // MAP is now a direct input; just parse it
   const map = useMemo(() => clampNum(mapStr), [mapStr]);
 
-  const mPAP = useMemo(() => {
-    const ps = clampNum(pasp);
-    const pd = clampNum(padp);
-    if (!ps || !pd) return undefined;
-    return (ps + 2 * pd) / 3;
-  }, [pasp, padp]);
+  // mPAP is a direct input (the monitor's area-under-curve mean), not (PASP + 2×PADP)/3
+  const mPAP = useMemo(() => clampNum(mpap), [mpap]);
+  const paSys = useMemo(() => clampNum(pasp), [pasp]);
+  const paDia = useMemo(() => clampNum(padp), [padp]);
 
   const caO2 = useMemo(() => {
     const H = clampNum(hb);
@@ -158,7 +157,7 @@ function useHemodynamics(state: HemoInputs) {
     return (m - w) / C;
   }, [mPAP, co, pcwp]);
 
-  return { bsa, map, mPAP, caO2, cvO2, vo2, co, ci, sv, svr, pvr, pvrWU };
+  return { bsa, map, mPAP, paSys, paDia, caO2, cvO2, vo2, co, ci, sv, svr, pvr, pvrWU };
 }
 
 
@@ -279,8 +278,24 @@ export default function App() {
                 <div className="space-y-1">
                   <Field label="MAP" suffix="mmHg" value={hemo.map} onChange={(v)=>setHemo({...hemo,map:v})} />
                   <Field label="CVP" suffix="mmHg" value={hemo.cvp} onChange={(v)=>setHemo({...hemo,cvp:v})} />
-                  <Field label="PASP" suffix="mmHg" value={hemo.pasp} onChange={(v)=>setHemo({...hemo,pasp:v})} />
-                  <Field label="PADP" suffix="mmHg" value={hemo.padp} onChange={(v)=>setHemo({...hemo,padp:v})} />
+                  <Field label="mPAP" suffix="mmHg" value={hemo.mpap} onChange={(v)=>setHemo({...hemo,mpap:v})} />
+                  <label className="flex items-center justify-between gap-3 pb-2">
+                    <div className="text-xs text-gray-500 shrink-0 pl-3">PASP / PADP <span className="block">(report only)</span></div>
+                    <div className="flex items-center gap-1 flex-1 min-w-0">
+                      <input
+                        className="w-full min-w-0 rounded-lg border border-gray-200 px-2 py-1 text-sm text-right focus:outline-none focus:ring focus:ring-indigo-200"
+                        type="number" inputMode="decimal" aria-label="PASP"
+                        value={hemo.pasp ?? ""} onChange={(e)=>setHemo({...hemo,pasp:e.target.value})}
+                      />
+                      <span className="text-gray-400">/</span>
+                      <input
+                        className="w-full min-w-0 rounded-lg border border-gray-200 px-2 py-1 text-sm text-right focus:outline-none focus:ring focus:ring-indigo-200"
+                        type="number" inputMode="decimal" aria-label="PADP"
+                        value={hemo.padp ?? ""} onChange={(e)=>setHemo({...hemo,padp:e.target.value})}
+                      />
+                      <span className="text-gray-500 text-sm min-w-10 text-right">mmHg</span>
+                    </div>
+                  </label>
                   <Field label="PCWP" suffix="mmHg" value={hemo.pcwp} onChange={(v)=>setHemo({...hemo,pcwp:v})} />
                 </div>
               </Card>
@@ -297,7 +312,6 @@ export default function App() {
                 <div className="text-base font-semibold mb-2">Derived (auto)</div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="p-2 rounded-lg bg-gray-50">BSA (Mosteller)<div className="text-lg font-semibold">{toFixedOrDash(results.bsa,2)} m²</div></div>
-                  <div className="p-2 rounded-lg bg-gray-50">mPAP<div className="text-lg font-semibold">{toFixedOrDash(results.mPAP,1)} mmHg</div></div>
                   <div className="p-2 rounded-lg bg-gray-50">CaO₂<div className="text-lg font-semibold">{toFixedOrDash(results.caO2,2)} mL/dL</div></div>
                   <div className="p-2 rounded-lg bg-gray-50">CvO₂<div className="text-lg font-semibold">{toFixedOrDash(results.cvO2,2)} mL/dL</div></div>
                   <div className="p-2 rounded-lg bg-gray-50">VO₂ (est.)<div className="text-lg font-semibold">{toFixedOrDash(results.vo2,0)} mL/min</div></div>
@@ -313,9 +327,12 @@ export default function App() {
                 <Metric label="Stroke Volume" value={results.sv} unit="mL/beat" digits={0} />
                 <Metric label="SVR" value={results.svr} unit="dyn·s·cm⁻⁵" digits={0} />
                 <Metric label="PVR" value={results.pvrWU} unit="WU" digits={2} />
+                <Metric label="mPAP" value={results.mPAP} unit="mmHg" digits={0} />
+                <Metric label="PASP" value={results.paSys} unit="mmHg" digits={0} />
+                <Metric label="PADP" value={results.paDia} unit="mmHg" digits={0} />
 
               </div>
-              <p className="text-xs text-gray-500 mt-3">Notes: SVR uses MAP−CVP; PVR uses mPAP−PCWP. Fick assumes VO₂ = 125×BSA. For accuracy, enter measured VO₂ when available (future update).</p>
+              <p className="text-xs text-gray-500 mt-3">Notes: SVR uses MAP−CVP; PVR uses mPAP−PCWP. Enter mPAP as shown on the monitor (waveform mean); PASP/PADP are reported only. Fick assumes VO₂ = 125×BSA. For accuracy, enter measured VO₂ when available (future update).</p>
             </Card>
           </Section>
         ) : (
